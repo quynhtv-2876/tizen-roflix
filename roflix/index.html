@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>RoFlix</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="config.js"></script>
+    <!-- Thêm thư viện hls.js -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        :root {
+            --bg-color: #101010;
+            --card-bg-color: #1d1d1d;
+            --text-color: #f0f0f0;
+            --accent-color: #e50914;
+            --focus-outline-color: #f8b400;
+            /* Vàng đậm hơn */
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        .view {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            padding: 30px;
+            box-sizing: border-box;
+            visibility: hidden;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+        }
+
+        .view.active {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        /* --- VIEW CHỌN NGUỒN --- */
+        #source-selection-view {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+
+        #source-selection-view h1 {
+            color: var(--accent-color);
+            font-size: 3em;
+            margin-bottom: 40px;
+        }
+
+        .source-button {
+            background-color: var(--card-bg-color);
+            color: var(--text-color);
+            padding: 20px 40px;
+            margin: 15px;
+            font-size: 1.8em;
+            border-radius: 10px;
+            border: 3px solid transparent;
+            transition: transform 0.2s, border-color 0.2s, background-color 0.2s;
+            cursor: pointer;
+        }
+
+        .source-button.focused {
+            transform: scale(1.1);
+            border-color: var(--focus-outline-color);
+            background-color: #2a2a2a;
+        }
+
+        /* --- VIEW LƯỚI PHIM --- */
+        #grid-view {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        #grid-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 0 10px;
+        }
+
+        #app-title-grid {
+            text-align: center;
+            color: var(--accent-color);
+            font-size: 2.5em;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin: 0;
+            flex-grow: 1;
+        }
+
+        #search-button {
+            font-size: 1.8em;
+            padding: 10px;
+            background: none;
+            border: 3px solid transparent;
+            color: var(--text-color);
+            border-radius: 5px;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: border-color 0.2s, background-color 0.2s;
+        }
+
+        #search-button.focused {
+            border-color: var(--focus-outline-color);
+            background-color: #2a2a2a;
+        }
+
+        #grid-content {
+            flex-grow: 1;
+            overflow-y: auto;
+            scrollbar-width: none;
+        }
+
+        #grid-content::-webkit-scrollbar {
+            display: none;
+        }
+
+        #movie-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 25px;
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .movie-card {
+            background-color: var(--card-bg-color);
+            border-radius: 8px;
+            overflow: hidden;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            border: 3px solid transparent;
+        }
+
+        .movie-card.focused {
+            transform: scale(1.1);
+            box-shadow: 0 0 25px rgba(248, 180, 0, 0.8);
+            border-color: var(--focus-outline-color);
+            z-index: 10;
+        }
+
+        .movie-card img {
+            width: 100%;
+            height: 300px;
+            object-fit: cover;
+            display: block;
+        }
+
+        .movie-card .title {
+            padding: 12px;
+            font-weight: bold;
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        #pagination-controls {
+            text-align: center;
+            padding: 20px 0;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-shrink: 0;
+        }
+
+        .page-button {
+            background-color: var(--card-bg-color);
+            color: var(--text-color);
+            padding: 10px 20px;
+            font-size: 1.2em;
+            border-radius: 5px;
+            border: 3px solid transparent;
+            cursor: pointer;
+            transition: border-color 0.2s, background-color 0.2s;
+        }
+
+        .page-button.focused {
+            border-color: var(--focus-outline-color);
+            background-color: #2a2a2a;
+        }
+
+        .page-button:disabled {
+            opacity: 0.5;
+            cursor: default;
+            background-color: var(--card-bg-color);
+            border-color: transparent;
+        }
+
+        #page-info {
+            font-size: 1.2em;
+            align-self: center;
+            margin: 0 10px;
+        }
+
+        /* --- VIEW TÌM KIẾM --- */
+        #search-view {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 50px;
+        }
+
+        #search-input {
+            width: 80%;
+            max-width: 600px;
+            padding: 15px 20px;
+            font-size: 1.5em;
+            border-radius: 8px;
+            border: 3px solid var(--card-bg-color);
+            background-color: var(--card-bg-color);
+            color: var(--text-color);
+            margin-bottom: 30px;
+        }
+
+        #search-input:focus {
+            outline: none;
+            border-color: var(--focus-outline-color);
+        }
+
+        #search-results-grid {
+            width: 100%;
+            flex-grow: 1;
+            overflow-y: auto;
+            scrollbar-width: none;
+        }
+
+        #search-results-grid::-webkit-scrollbar {
+            display: none;
+        }
+
+        #search-results-grid ul {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 25px;
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+
+        /* --- VIEW CHI TIẾT PHIM --- */
+        #details-view {
+            display: flex;
+            gap: 40px;
+        }
+
+        #details-poster {
+            width: 350px;
+            height: 525px;
+            object-fit: cover;
+            border-radius: 10px;
+            flex-shrink: 0;
+        }
+
+        #details-info {
+            display: flex;
+            flex-direction: column;
+            max-height: 90vh;
+            width: 100%;
+        }
+
+        #details-title {
+            font-size: 3em;
+            color: var(--accent-color);
+            margin: 0 0 15px 0;
+        }
+
+        #details-description {
+            font-size: 1.1em;
+            line-height: 1.6;
+            max-width: 90%;
+            flex-grow: 1;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            margin-bottom: 20px;
+            padding-right: 15px;
+        }
+
+        #episodes-section {
+            margin-top: auto;
+            max-width: 90%;
+        }
+
+        #episodes-section h2 {
+            margin-bottom: 10px;
+        }
+
+        #episodes-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: block;
+            max-height: 250px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            padding-right: 10px;
+        }
+
+        .watch-option {
+            background-color: var(--card-bg-color);
+            padding: 10px 15px;
+            border-radius: 5px;
+            border: 3px solid transparent;
+            transition: background-color 0.2s, border-color 0.2s;
+            display: inline-block;
+            margin: 5px;
+        }
+
+        .watch-option.focused {
+            background-color: var(--accent-color);
+            border-color: var(--focus-outline-color);
+            color: #fff;
+        }
+
+        .server-group {
+            margin-bottom: 20px;
+        }
+
+        .server-name {
+            font-weight: bold;
+            margin-bottom: 8px;
+            font-size: 1.2em;
+            border-left: 4px solid var(--accent-color);
+            padding-left: 10px;
+        }
+
+        .server-episodes {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+
+        /* --- VIEW TRÌNH PHÁT VIDEO --- */
+        #player-view {
+            padding: 0;
+            background-color: #000;
+        }
+
+        #video-player {
+            width: 100%;
+            height: 100%;
+        }
+
+        #hls-player {
+            display: none;
+            width: 100%;
+            height: 100%;
+        }
+
+        #player-controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            padding: 20px 40px;
+            box-sizing: border-box;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.5s, visibility 0.5s;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        #player-controls.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .progress-time-container {
+            flex-grow: 1;
+        }
+
+        #progress-bar-container {
+            width: 100%;
+            height: 8px;
+            background-color: rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+        }
+
+        #progress-bar {
+            width: 0%;
+            height: 100%;
+            background-color: var(--accent-color);
+            border-radius: 4px;
+        }
+
+        #time-display {
+            margin-top: 10px;
+            font-size: 1.2em;
+        }
+
+        .control-button {
+            font-size: 2.2em;
+            color: rgba(255, 255, 255, 0.7);
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .control-button.active {
+            color: var(--focus-outline-color);
+        }
+
+        .control-button:hover {
+            color: #fff;
+        }
+
+        #play-pause-icon {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 80px;
+            opacity: 0;
+            transition: opacity 0.3s, transform 0.3s;
+            pointer-events: none;
+            text-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+
+        #play-pause-icon.visible {
+            opacity: 0.8;
+            transform: translate(-50%, -50%) scale(1.1);
+        }
+
+        /* --- THÔNG BÁO TRẠNG THÁI --- */
+        #status-message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.5em;
+            text-align: center;
+            padding: 20px;
+            background-color: rgba(0, 0, 0, 0.8);
+            border-radius: 10px;
+            z-index: 1000;
+            display: none;
+        }
+
+        #status-message.active {
+            display: block;
+        }
+
+        .loader {
+            border: 8px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 8px solid var(--accent-color);
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px auto;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="status-message">
+        <div class="loader"></div>
+        <p></p>
+    </div>
+
+    <div id="source-selection-view" class="view active">
+        <h1>Chọn Nguồn Phim</h1>
+        <div>
+            <button class="source-button focused" data-source="nguonc">NguonC</button>
+            <button class="source-button" data-source="rophim">RoPhim</button>
+        </div>
+    </div>
+
+    <div id="grid-view" class="view">
+        <div id="grid-header">
+            <h1 id="app-title-grid">RoFlix</h1>
+            <button id="search-button"><i class="fas fa-search"></i></button>
+        </div>
+        <div id="grid-content">
+            <ul id="movie-grid"></ul>
+        </div>
+        <div id="pagination-controls">
+            <button id="prev-page-button" class="page-button" disabled>&lt; Trước</button>
+            <span id="page-info">Trang 1 / ?</span>
+            <button id="next-page-button" class="page-button" disabled>Sau &gt;</button>
+        </div>
+    </div>
+
+    <div id="search-view" class="view">
+        <input type="text" id="search-input" placeholder="Nhập tên phim...">
+        <div id="search-results-grid">
+            <ul></ul>
+        </div>
+    </div>
+
+    <div id="details-view" class="view">
+        <img id="details-poster" src="" alt="Poster">
+        <div id="details-info">
+            <h1 id="details-title"></h1>
+            <p id="details-description"></p>
+            <div id="episodes-section">
+                <h2>Tùy chọn xem / Tập phim</h2>
+                <div id="episodes-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="player-view" class="view">
+        <video id="video-player"></video>
+        <video id="hls-player" style="display:none; width:100%; height:100%;"></video>
+        <div id="player-controls">
+            <div class="progress-time-container">
+                <div id="progress-bar-container">
+                    <div id="progress-bar"></div>
+                </div>
+                <div id="time-display">
+                    <span id="current-time">00:00</span> / <span id="duration">00:00</span>
+                </div>
+            </div>
+            <div id="caption-button" class="control-button">
+                <i class="fa-solid fa-closed-captioning"></i>
+            </div>
+        </div>
+        <div id="play-pause-icon"></div>
+    </div>
+
+    <script>
+        // --- Cấu hình ---
+        const SERVER_URL = config.serverUrl;
+        const API_KEY = atob(config.encodedApiKey);
+        const FETCH_TIMEOUT = 90000;
+
+        // --- DOM Elements ---
+        const views = {
+            sourceSelection: document.getElementById('source-selection-view'),
+            grid: document.getElementById('grid-view'),
+            search: document.getElementById('search-view'),
+            details: document.getElementById('details-view'),
+            player: document.getElementById('player-view')
+        };
+        const movieGrid = document.getElementById('movie-grid');
+        const episodesList = document.getElementById('episodes-list');
+        const statusMessage = document.getElementById('status-message');
+        const nativePlayer = document.getElementById('video-player');
+        const hlsPlayerElement = document.getElementById('hls-player');
+        let activePlayer = nativePlayer;
+        let hlsInstance = null;
+        const playerControls = document.getElementById('player-controls');
+        const progressBar = document.getElementById('progress-bar');
+        const currentTimeDisplay = document.getElementById('current-time');
+        const durationDisplay = document.getElementById('duration');
+        const playPauseIcon = document.getElementById('play-pause-icon');
+        const captionButton = document.getElementById('caption-button');
+        const searchButton = document.getElementById('search-button');
+        const searchInput = document.getElementById('search-input');
+        const searchResultsGrid = document.getElementById('search-results-grid').querySelector('ul');
+        const prevPageButton = document.getElementById('prev-page-button');
+        const nextPageButton = document.getElementById('next-page-button');
+        const pageInfo = document.getElementById('page-info');
+
+        // --- State Variables ---
+        let movies = [], episodesData = [];
+        let searchResults = [];
+        let gridIndex = 0, episodeServerIndex = 0, episodeIndex = 0, searchIndex = -1, sourceButtonIndex = 0;
+        let currentView = 'sourceSelection';
+        let currentSource = 'nguonc';
+        let currentPage = 1, totalPages = 1;
+        let currentSearchPage = 1, totalSearchPages = 1;
+        let currentSearchQuery = '';
+        let controlsTimeout, subtitlesEnabled = true;
+        let statusTimeout;
+        let lastGridView = 'grid';
+        let currentMovieData = null;
+        let loadedBatches = 1; // Số batch đã load (mỗi batch = 3 trang)
+        let isLoadingMore = false; // Flag để tránh load trùng 
+
+        // --- Utility Functions ---
+        function showStatus(message, isError = false, duration = null) { clearTimeout(statusTimeout); statusMessage.querySelector('p').innerHTML = message; statusMessage.classList.add('active'); if (!isError || duration) { statusTimeout = setTimeout(hideStatus, duration || (isError ? 4000 : FETCH_TIMEOUT)); } }
+        function hideStatus() { clearTimeout(statusTimeout); statusMessage.classList.remove('active'); }
+
+        function switchView(viewName) {
+            if (viewName !== 'player') {
+                hideStatus();
+            }
+            if (currentView === 'grid' || currentView === 'search') {
+                lastGridView = currentView;
+            }
+
+            // SỬA LỖI: Dọn dẹp player CHỈ KHI rời khỏi nó
+            if (currentView === 'player' && viewName !== 'player') {
+                console.log("Dọn dẹp trình phát video...");
+                if (hlsInstance) {
+                    hlsInstance.destroy();
+                    hlsInstance = null;
+                    console.log("HLS instance destroyed.");
+                }
+                nativePlayer.pause();
+                hlsPlayerElement.pause();
+
+                // Đặt src thành chuỗi rỗng MỘT CÁCH AN TOÀN
+                // Bằng cách tạm thời gỡ bỏ event listener lỗi
+                const errorListener = nativePlayer._errorListener; // Giả sử ta lưu listener
+                if (errorListener) nativePlayer.removeEventListener('error', errorListener);
+                nativePlayer.src = "";
+                hlsPlayerElement.src = "";
+                if (errorListener) nativePlayer.addEventListener('error', errorListener); // Gắn lại
+
+
+                Array.from(nativePlayer.querySelectorAll('track')).forEach(track => track.remove());
+                Array.from(hlsPlayerElement.querySelectorAll('track')).forEach(track => track.remove());
+
+                captionButton.classList.remove('active');
+                hlsPlayerElement.style.display = 'none';
+                nativePlayer.style.display = 'block';
+                activePlayer = nativePlayer;
+            }
+
+            currentView = viewName;
+            Object.values(views).forEach(v => v.classList.remove('active'));
+            views[viewName].classList.add('active');
+            if (viewName === 'grid') gridIndex = 0;
+            else if (viewName === 'details') { episodeServerIndex = 0; episodeIndex = 0; }
+            else if (viewName === 'search') searchIndex = -1;
+            else if (viewName === 'sourceSelection') sourceButtonIndex = 0;
+            updateFocus();
+        }
+
+        function formatTime(seconds) { if (isNaN(seconds) || seconds < 0) return "00:00"; const h = Math.floor(seconds / 3600); const m = Math.floor((seconds % 3600) / 60); const s = Math.floor(seconds % 60); const formattedM = String(m).padStart(2, '0'); const formattedS = String(s).padStart(2, '0'); return h > 0 ? `${h}:${formattedM}:${formattedS}` : `${formattedM}:${formattedS}`; }
+        function getItemsPerRow(gridElement = movieGrid) { if (!gridElement || !gridElement.firstChild) return 5; try { const gridStyles = window.getComputedStyle(gridElement); if (gridElement.firstChild && gridElement.firstChild.offsetWidth > 0) { const gridWidth = gridElement.clientWidth; const itemWidth = gridElement.firstChild.offsetWidth; const gap = parseFloat(gridStyles.gap) || 0; return Math.max(1, Math.floor((gridWidth + gap) / (itemWidth + gap))); } else { const gridTemplateColumns = gridStyles.getPropertyValue('grid-template-columns'); return gridTemplateColumns.split(' ').length || 1; } } catch (e) { console.error("Error calculating items per row:", e); return 5; } }
+
+        // --- API Fetching ---
+        async function fetchApi(endpoint, params = {}) { const url = new URL(`${SERVER_URL}/api/${currentSource}${endpoint}`); Object.keys(params).forEach(key => url.searchParams.append(key, params[key])); console.log(`Fetching: ${url.toString()}`); const controller = new AbortController(); const timeoutId = setTimeout(() => { controller.abort(); console.error(`Fetch timeout for ${endpoint}`); }, FETCH_TIMEOUT); try { const response = await fetch(url.toString(), { signal: controller.signal, headers: { 'X-API-KEY': API_KEY } }); clearTimeout(timeoutId); if (!response.ok) { const status = response.status; let errorMsg = `Lỗi HTTP ${status}`; try { const errorData = await response.json(); console.error("Server error response:", errorData); errorMsg = errorData.message || errorMsg; } catch (e) { const textError = await response.text(); console.error("Server error response (non-JSON):", textError); errorMsg = textError || errorMsg; } if (status === 401) throw new Error('API Key không hợp lệ.'); throw new Error(`${errorMsg}`); } return await response.json(); } catch (error) { clearTimeout(timeoutId); console.error(`Lỗi khi gọi ${endpoint}:`, error); throw new Error(error.name === 'AbortError' ? 'Yêu cầu bị timeout.' : error.message); } }
+
+        // --- Grid View Logic ---
+        async function fetchMovies(isInitial = true) {
+            if (isInitial) {
+                showStatus(`Đang tải phim...`);
+                movieGrid.innerHTML = '';
+                movies = [];
+                gridIndex = 0;
+                loadedBatches = 1;
+            } else {
+                if (isLoadingMore) return;
+                isLoadingMore = true;
+                showStatus(`Đang tải thêm phim...`);
+            }
+
+            try {
+                const data = await fetchApi('/phimhay', { batch: loadedBatches });
+                const newMovies = data.movies || [];
+
+                if (newMovies.length > 0) {
+                    newMovies.forEach(movie => {
+                        const li = document.createElement('li');
+                        li.className = 'movie-card';
+                        li.innerHTML = `<img src="${movie.imageUrl}" alt="${movie.title}" loading="lazy"><div class="title">${movie.title}</div>`;
+                        movieGrid.appendChild(li);
+                    });
+
+                    movies = isInitial ? newMovies : [...movies, ...newMovies];
+
+                    if (isInitial) {
+                        currentPage = 1;
+                        totalPages = 1;
+                        updateFocus();
+                        updatePagination();
+                    }
+
+                    hideStatus();
+                } else {
+                    if (isInitial) {
+                        showStatus("Không tìm thấy phim nào.", true, 3000);
+                        updatePagination();
+                    } else {
+                        hideStatus();
+                    }
+                }
+            } catch (error) {
+                showStatus(`<strong>Lỗi tải phim</strong><br><small>${error.message}</small>`, true);
+                if (isInitial) updatePagination();
+            } finally {
+                isLoadingMore = false;
+            }
+        }
+
+        async function loadMoreMovies() {
+            if (isLoadingMore) return;
+            loadedBatches++;
+            await fetchMovies(false);
+        }
+
+        function updatePagination() {
+            const paginationControls = document.getElementById('pagination-controls');
+            paginationControls.style.display = 'none'; // Luôn ẩn vì dùng infinite scroll
+        }
+
+        // --- Search View Logic ---
+        function showSearchView() { switchView('search'); searchInput.value = ''; searchResultsGrid.innerHTML = ''; searchResults = []; searchIndex = -1; currentSearchPage = 1; totalSearchPages = 1; updateFocus(); }
+        async function performSearch(query, page = 1) { if (!query) return; showStatus(`Đang tìm "${query}" trang ${page}...`); if (page === 1) { searchResultsGrid.innerHTML = ''; searchResults = []; searchIndex = 0; } currentSearchQuery = query; try { const data = await fetchApi('/search', { keyword: query, page }); const newResults = data.movies || []; currentSearchPage = data.pagination?.currentPage || 1; totalSearchPages = data.pagination?.totalPages || 1; if (newResults.length > 0) { newResults.forEach(movie => { const li = document.createElement('li'); li.className = 'movie-card'; li.innerHTML = `<img src="${movie.imageUrl}" alt="${movie.title}" loading="lazy"><div class="title">${movie.title}</div>`; searchResultsGrid.appendChild(li); }); searchResults = page === 1 ? newResults : [...searchResults, ...newResults]; hideStatus(); } else if (page === 1) { showStatus(`Không tìm thấy kết quả cho "${query}".`, true, 3000); } else { hideStatus(); } } catch (error) { showStatus(`<strong>Lỗi tìm kiếm</strong><br><small>${error.message}</small>`, true); } /* SỬA LỖI: performSearch sẽ không gọi updateFocus nữa, để handleSearchKeys gọi */ }
+
+        // --- Details View Logic ---
+        async function showDetailsView(movieData) {
+            currentMovieData = movieData;
+            document.getElementById('details-poster').src = movieData.imageUrl;
+            document.getElementById('details-title').innerHTML = movieData.title;
+            document.getElementById('details-description').innerHTML = "";
+            episodesList.innerHTML = '';
+            episodesData = [];
+            episodeServerIndex = 0;
+            episodeIndex = 0;
+            switchView('details');
+            showStatus("Đang tải chi tiết phim...");
+            try {
+                const idParam = movieData.slug || movieData.link;
+                const paramKey = currentSource === 'nguonc' ? 'movieSlug' : 'movieUrl';
+                const params = {}; params[paramKey] = idParam;
+                const data = await fetchApi('/details', params);
+
+                console.log("Details API response:", data);
+                console.log("Episodes data:", data.episodes);
+
+                document.getElementById('details-description').innerHTML = data.description || "Không có mô tả.";
+                episodesData = data.episodes || [];
+
+                console.log("Parsed episodesData:", episodesData);
+                console.log("episodesData length:", episodesData.length);
+
+                // Kiểm tra có episodes không
+                const hasEpisodes = episodesData.length > 0 &&
+                    episodesData.some(sg => sg && sg.episodes && sg.episodes.length > 0);
+
+                console.log("Has episodes:", hasEpisodes);
+
+                if (hasEpisodes) {
+                    document.getElementById('episodes-section').style.display = 'block';
+                    renderEpisodes();
+                    updateFocus();
+                } else {
+                    document.getElementById('episodes-section').style.display = 'none';
+                    console.warn("Không có tập phim. episodesData:", JSON.stringify(episodesData));
+                    showStatus("Phim này chưa có tập để xem.", true, 3000);
+                }
+                hideStatus();
+            } catch (error) {
+                console.error("Lỗi khi tải chi tiết:", error);
+                showStatus(`<strong>Lỗi tải chi tiết</strong><br><small>${error.message}</small>`, true);
+                document.getElementById('details-description').innerHTML = "Lỗi khi tải chi tiết phim.";
+            }
+        }
+        function renderEpisodes() {
+            episodesList.innerHTML = '';
+
+            console.log("renderEpisodes called with episodesData:", episodesData);
+
+            if (!episodesData || episodesData.length === 0) {
+                console.error("No episodesData to render!");
+                return;
+            }
+
+            episodesData.forEach((serverGroup, sIndex) => {
+                console.log(`Rendering server ${sIndex}:`, serverGroup);
+
+                if (!serverGroup || !serverGroup.episodes || serverGroup.episodes.length === 0) {
+                    console.warn(`Server ${sIndex} has no episodes, skipping`);
+                    return;
+                }
+
+                const groupDiv = document.createElement('div');
+                groupDiv.className = 'server-group';
+
+                // Luôn hiển thị tên server
+                if (serverGroup.server_name) {
+                    const serverNameDiv = document.createElement('div');
+                    serverNameDiv.className = 'server-name';
+                    serverNameDiv.textContent = serverGroup.server_name;
+                    groupDiv.appendChild(serverNameDiv);
+                }
+
+                const episodeContainer = document.createElement('div');
+                episodeContainer.className = 'server-episodes';
+
+                serverGroup.episodes.forEach((ep, eIndex) => {
+                    console.log(`  Episode ${eIndex}:`, ep);
+
+                    const li = document.createElement('li');
+                    li.className = 'watch-option';
+                    li.textContent = ep.name || `Tập ${eIndex + 1}`;
+                    li.dataset.serverIndex = sIndex;
+                    li.dataset.episodeIndex = eIndex;
+                    episodeContainer.appendChild(li);
+                });
+
+                groupDiv.appendChild(episodeContainer);
+                episodesList.appendChild(groupDiv);
+
+                console.log(`Server ${sIndex} rendered with ${serverGroup.episodes.length} episodes`);
+            });
+
+            console.log("renderEpisodes completed. Total HTML:", episodesList.innerHTML.length, "chars");
+        }
+
+        // --- Player View Logic ---
+        async function playSelectedEpisode() {
+            let episodeToPlay = null;
+            if (episodesData[episodeServerIndex]?.episodes?.[episodeIndex]) {
+                episodeToPlay = episodesData[episodeServerIndex].episodes[episodeIndex];
+            }
+            if (!episodeToPlay || !episodeToPlay.link) {
+                showStatus("Không thể phát tập này.", true, 3000);
+                return;
+            }
+            switchView('player');
+            showStatus("Đang tải link xem phim...");
+
+            // Dọn dẹp player (chỉ dọn dẹp khi bắt đầu play)
+            if (hlsInstance) {
+                hlsInstance.destroy();
+                hlsInstance = null;
+            }
+            nativePlayer.pause();
+            nativePlayer.src = "";
+            nativePlayer.querySelectorAll('track').forEach(track => track.remove());
+            hlsPlayerElement.pause();
+            hlsPlayerElement.src = "";
+            hlsPlayerElement.querySelectorAll('track').forEach(track => track.remove());
+
+            try {
+                const params = { episodeLink: episodeToPlay.link };
+                if (episodeToPlay.direct_link_m3u8) {
+                    params.direct_link_m3u8 = episodeToPlay.direct_link_m3u8;
+                }
+                const data = await fetchApi('/watch', params);
+
+                if (data.videoUrl) {
+                    const videoSrc = data.videoUrl;
+                    const subtitleSrc = data.subtitleUrl;
+                    captionButton.classList.remove('active');
+                    subtitlesEnabled = false;
+
+                    const isLocal = SERVER_URL.includes('localhost') || SERVER_URL.includes('10.0.2.2') || SERVER_URL.includes('192.168');
+
+                    if (videoSrc.includes('.m3u8')) {
+                        if (Hls.isSupported() && isLocal) {
+                            console.log("Using HLS.js player for Simulator/Local.");
+                            activePlayer = hlsPlayerElement;
+                            activePlayer.style.display = 'block';
+                            nativePlayer.style.display = 'none';
+                            hlsInstance = new Hls();
+                            hlsInstance.loadSource(videoSrc);
+                            hlsInstance.attachMedia(activePlayer);
+                            hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => activePlayer.play().catch(e => console.error("HLS.js Autoplay failed:", e)));
+                            hlsInstance.on(Hls.Events.ERROR, (event, data) => {
+                                console.error('HLS.js Error:', data);
+                                if (data.fatal) {
+                                    showStatus(`Lỗi HLS: ${data.details}`, true);
+                                    if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hlsInstance.startLoad();
+                                    else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hlsInstance.recoverMediaError();
+                                    else setTimeout(showDetailsViewFromPlayer, 3000);
+                                }
+                            });
+                        } else {
+                            console.log("Using native HLS player (TV).");
+                            activePlayer = nativePlayer;
+                            activePlayer.style.display = 'block';
+                            hlsPlayerElement.style.display = 'none';
+                            activePlayer.src = videoSrc;
+                            activePlayer.load(); // SỬA LỖI: Gọi load() cho native player
+                        }
+                    } else {
+                        console.log("Using native player for non-HLS source.");
+                        activePlayer = nativePlayer;
+                        activePlayer.style.display = 'block';
+                        hlsPlayerElement.style.display = 'none';
+                        activePlayer.src = videoSrc;
+                        activePlayer.load(); // SỬA LỖI: Gọi load() cho native player
+                    }
+
+                    if (subtitleSrc) {
+                        const track = document.createElement('track');
+                        track.kind = 'subtitles'; track.label = 'Tiếng Việt'; track.srclang = 'vi';
+                        track.src = subtitleSrc; track.default = true;
+                        activePlayer.appendChild(track);
+                    }
+
+                    hideStatus();
+                } else {
+                    throw new Error("Không tìm thấy video URL từ server.");
+                }
+            } catch (error) {
+                console.error("Lỗi khi tải video:", error);
+                showStatus(`Lỗi khi tải video: ${error.message}`, true);
+                setTimeout(showDetailsViewFromPlayer, 3000);
+            }
+        }
+
+        function showDetailsViewFromPlayer() {
+            if (currentMovieData) {
+                showDetailsView(currentMovieData);
+            } else {
+                switchView(lastGridView);
+            }
+        }
+
+        function updatePlayerUI() { if (!activePlayer.duration) return; progressBar.style.width = `${(activePlayer.currentTime / activePlayer.duration) * 100}%`; currentTimeDisplay.textContent = formatTime(activePlayer.currentTime); }
+        function showControls() { playerControls.classList.add('visible'); clearTimeout(controlsTimeout); controlsTimeout = setTimeout(() => playerControls.classList.remove('visible'), 3000); }
+        function togglePlayPause() { showControls(); if (activePlayer.paused) { activePlayer.play(); } else { activePlayer.pause(); } }
+        function showPlayPauseIcon(isPaused) { playPauseIcon.innerHTML = isPaused ? '<i class="fa-solid fa-pause"></i>' : '<i class="fa-solid fa-play"></i>'; playPauseIcon.classList.add('visible'); setTimeout(() => playPauseIcon.classList.remove('visible'), 500); }
+        function toggleSubtitles() { if (activePlayer.textTracks && activePlayer.textTracks.length > 0) { const firstTrack = activePlayer.textTracks[0]; subtitlesEnabled = !subtitlesEnabled; firstTrack.mode = subtitlesEnabled ? 'showing' : 'hidden'; captionButton.classList.toggle('active', subtitlesEnabled); showControls(); } }
+
+
+        // --- Focus Management ---
+        function updateFocus() { document.querySelectorAll('.focused').forEach(el => el.classList.remove('focused')); try { if (currentView === 'sourceSelection') { const buttons = views.sourceSelection.querySelectorAll('.source-button'); buttons[sourceButtonIndex]?.classList.add('focused'); } else if (currentView === 'grid') { if (gridIndex === -1) searchButton.classList.add('focused'); else if (gridIndex === -2) { if (!prevPageButton.disabled) prevPageButton.classList.add('focused'); else if (!nextPageButton.disabled) { gridIndex = -3; nextPageButton.classList.add('focused'); } else if (movies.length > 0) { gridIndex = movies.length - 1; updateFocus(); } else gridIndex = -1; } else if (gridIndex === -3) { if (!nextPageButton.disabled) nextPageButton.classList.add('focused'); else if (!prevPageButton.disabled) { gridIndex = -2; prevPageButton.classList.add('focused'); } else if (movies.length > 0) { gridIndex = movies.length - 1; updateFocus(); } else gridIndex = -1; } else if (movies.length > 0 && gridIndex >= 0 && gridIndex < movies.length) { const currentCard = movieGrid.children[gridIndex]; if (currentCard) { currentCard.classList.add('focused'); currentCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } else { gridIndex = -1; updateFocus(); } } else { gridIndex = -1; searchButton.classList.add('focused'); } } else if (currentView === 'search') { if (searchIndex === -1) { searchInput.focus(); } else if (searchResults.length > 0 && searchIndex >= 0 && searchIndex < searchResults.length) { const currentCard = searchResultsGrid.children[searchIndex]; if (currentCard) { currentCard.classList.add('focused'); currentCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } else { searchIndex = -1; updateFocus(); } searchInput.blur(); } else { searchIndex = -1; searchInput.focus(); } } else if (currentView === 'details') { updateEpisodeFocus(); } } catch (e) { console.error("Error updating focus:", e); } }
+        function updateEpisodeFocus() { document.querySelectorAll('.watch-option.focused').forEach(el => el.classList.remove('focused')); try { if (episodesData.length > 0 && episodeServerIndex >= 0 && episodeIndex >= 0 && episodeServerIndex < episodesList.children.length) { const serverGroupElement = episodesList.children[episodeServerIndex]; const episodeContainer = serverGroupElement?.querySelector('.server-episodes'); if (episodeContainer && episodeIndex < episodeContainer.children.length) { const currentItem = episodeContainer.children[episodeIndex]; if (currentItem) { currentItem.classList.add('focused'); serverGroupElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); currentItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } else { console.warn(`Episode index ${episodeIndex} invalid for server ${episodeServerIndex}`); episodeIndex = 0; } } else { console.warn(`Episode index ${episodeIndex} or container invalid for server ${episodeServerIndex}`); episodeServerIndex = 0; episodeIndex = 0; updateEpisodeFocus(); } } else if (episodesData.length > 0) { console.warn(`Server index ${episodeServerIndex} out of bounds`); episodeServerIndex = 0; episodeIndex = 0; updateEpisodeFocus(); } else { console.log("No episodes to focus."); } } catch (e) { console.error("Error updating episode focus:", e); } }
+
+
+        // --- Key Handling (SỬA LỖI NÚT BACK & SEARCH) ---
+        async function handleKeydown(e) {
+            console.log("Key pressed:", e.keyCode, "Current View:", currentView);
+
+            if (e.keyCode === 10009) {
+                hideStatus();
+                if (currentView === 'player') {
+                    showDetailsViewFromPlayer();
+                } else if (currentView === 'details') {
+                    switchView(lastGridView);
+                } else if (currentView === 'search') {
+                    searchInput.blur(); // SỬA LỖI: Luôn blur input khi back
+                    switchView('grid');
+                } else if (currentView === 'grid') {
+                    switchView('sourceSelection');
+                } else if (currentView === 'sourceSelection') {
+                    tizen.application.getCurrentApplication().exit();
+                }
+                return;
+            }
+
+            if (currentView === 'player') showControls();
+
+            if (statusMessage.classList.contains('active')) {
+                console.log("Ignoring key press while loading/showing status.");
+                return;
+            }
+
+            // SỬA LỖI: Tách biệt logic xử lý phím
+            if (currentView === 'sourceSelection') {
+                handleSourceSelectionKeys(e);
+            } else if (currentView === 'grid') {
+                await handleGridKeys(e); // Chờ fetch data nếu nhấn phân trang
+            } else if (currentView === 'search') {
+                await handleSearchKeys(e); // Chờ tìm kiếm nếu nhấn Enter
+            } else if (currentView === 'details') {
+                handleDetailsKeys(e);
+            } else if (currentView === 'player') {
+                handlePlayerKeys(e);
+            }
+
+            // Chỉ update focus nếu không phải đang gõ vào ô search
+            if (document.activeElement !== searchInput) {
+                updateFocus();
+            }
+        }
+
+        async function handleSourceSelectionKeys(e) { const buttons = views.sourceSelection.querySelectorAll('.source-button'); switch (e.keyCode) { case 37: sourceButtonIndex = Math.max(0, sourceButtonIndex - 1); break; case 39: sourceButtonIndex = Math.min(buttons.length - 1, sourceButtonIndex + 1); break; case 13: currentSource = buttons[sourceButtonIndex].dataset.source; switchView('grid'); await fetchMovies(true); break; } }
+        async function handleGridKeys(e) {
+            const itemsPerRow = getItemsPerRow();
+            const lastItemIndex = movies.length - 1;
+            const isPaginationFocused = gridIndex < -1;
+
+            switch (e.keyCode) {
+                case 37:
+                    if (gridIndex === -1) { }
+                    else if (gridIndex === -2) { }
+                    else if (gridIndex === -3) gridIndex = -2;
+                    else if (gridIndex > 0) gridIndex--;
+                    break;
+                case 39:
+                    if (gridIndex === -1) { }
+                    else if (gridIndex === -2) gridIndex = -3;
+                    else if (gridIndex === -3) { }
+                    else if (gridIndex < lastItemIndex) gridIndex++;
+                    break;
+                case 38:
+                    if (gridIndex >= 0 && gridIndex < itemsPerRow) gridIndex = -1;
+                    else if (gridIndex >= itemsPerRow) gridIndex -= itemsPerRow;
+                    else if (isPaginationFocused) gridIndex = lastItemIndex >= 0 ? lastItemIndex : -1;
+                    break;
+                case 40:
+                    if (gridIndex === -1) gridIndex = movies.length > 0 ? 0 : -2;
+                    else if (gridIndex >= 0 && gridIndex + itemsPerRow <= lastItemIndex) {
+                        gridIndex += itemsPerRow;
+                    } else if (gridIndex >= 0) {
+                        // Gần cuối danh sách, load thêm phim
+                        if (gridIndex >= lastItemIndex - itemsPerRow * 2 && !isLoadingMore) {
+                            loadMoreMovies();
+                        }
+                        gridIndex = -2;
+                    }
+                    break;
+                case 13:
+                    if (gridIndex === -1) showSearchView();
+                    else if (gridIndex === -2 && !prevPageButton.disabled) await fetchMovies(true);
+                    else if (gridIndex === -3 && !nextPageButton.disabled) await fetchMovies(true);
+                    else if (gridIndex >= 0 && movies[gridIndex]) await showDetailsView(movies[gridIndex]);
+                    break;
+            }
+        }
+
+        async function handleSearchKeys(e) {
+            const itemsPerRow = getItemsPerRow(searchResultsGrid);
+            const lastItemIndex = searchResults.length - 1;
+
+            if (document.activeElement === searchInput && e.keyCode === 13) {
+                e.preventDefault();
+                const query = searchInput.value;
+                searchInput.blur();
+                await performSearch(query, 1); // Chờ tìm kiếm
+                searchIndex = searchResults.length > 0 ? 0 : -1; // Đặt index sau khi có kết quả
+                updateFocus(); // Cập nhật focus
+                return;
+            }
+            if (document.activeElement === searchInput) return;
+
+            switch (e.keyCode) {
+                case 37: if (searchIndex > 0) searchIndex--; break;
+                case 39: if (searchIndex < lastItemIndex) searchIndex++; break;
+                case 38: if (searchIndex >= itemsPerRow) searchIndex -= itemsPerRow; else searchIndex = -1; break;
+                case 40:
+                    if (searchIndex === -1 && searchResults.length > 0) searchIndex = 0;
+                    else if (searchIndex >= 0 && searchIndex + itemsPerRow <= lastItemIndex) searchIndex += itemsPerRow;
+                    break;
+                case 13:
+                    if (searchIndex >= 0 && searchResults[searchIndex]) {
+                        await showDetailsView(searchResults[searchIndex]);
+                    }
+                    break;
+            }
+        }
+
+        function handleDetailsKeys(e) { const numServers = episodesData.length; if ((numServers === 0 || !episodesData[episodeServerIndex]?.episodes) && e.keyCode !== 10009) { return; } const numEpisodesInCurrentServer = episodesData[episodeServerIndex]?.episodes?.length || 0; switch (e.keyCode) { case 37: if (episodeIndex > 0) episodeIndex--; break; case 39: if (episodeIndex < numEpisodesInCurrentServer - 1) episodeIndex++; break; case 38: if (episodeServerIndex > 0) { episodeServerIndex--; episodeIndex = Math.min(episodeIndex, (episodesData[episodeServerIndex]?.episodes?.length || 1) - 1); } break; case 40: if (episodeServerIndex < numServers - 1) { episodeServerIndex++; episodeIndex = Math.min(episodeIndex, (episodesData[episodeServerIndex]?.episodes?.length || 1) - 1); } break; case 13: if (episodeServerIndex >= 0 && episodeIndex >= 0) playSelectedEpisode(); break; } updateEpisodeFocus(); }
+        function handlePlayerKeys(e) { switch (e.keyCode) { case 13: togglePlayPause(); break; case 37: activePlayer.currentTime = Math.max(0, activePlayer.currentTime - 10); showPlayPauseIcon(true); break; case 39: activePlayer.currentTime = Math.min(activePlayer.duration || 0, activePlayer.currentTime + 10); showPlayPauseIcon(true); break; case 38: activePlayer.currentTime = Math.min(activePlayer.duration || 0, activePlayer.currentTime + 60); showPlayPauseIcon(true); break; case 40: activePlayer.currentTime = Math.max(0, activePlayer.currentTime - 60); showPlayPauseIcon(true); break; case 404: toggleSubtitles(); break; } }
+
+        // --- Initialization ---
+        function initializeApp() { updateFocus(); }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.addEventListener('keydown', handleKeydown);
+
+            const playerErrorListener = (e) => {
+                console.error("Video Player Error:", activePlayer.id, activePlayer.error);
+                // SỬA LỖI: Chỉ hiển thị lỗi nếu src có giá trị và đang ở màn hình player
+                if (activePlayer.src && activePlayer.src !== "" && !activePlayer.src.endsWith('#') && currentView === 'player') {
+                    showStatus(`Lỗi trình phát video (${activePlayer.error?.code}): ${activePlayer.error?.message || 'Không rõ'}`, true);
+                }
+            };
+
+            [nativePlayer, hlsPlayerElement].forEach(player => {
+                player.addEventListener('timeupdate', updatePlayerUI);
+                player.addEventListener('loadedmetadata', () => { durationDisplay.textContent = formatTime(player.duration); });
+                player.addEventListener('play', () => { showPlayPauseIcon(false); showControls(); });
+                player.addEventListener('pause', () => { showPlayPauseIcon(true); showControls(); });
+                player.addEventListener('canplay', () => {
+                    console.log("Video can play now for:", player.id);
+                    if (currentView === 'player') {
+                        player.play().catch(e => console.error("Autoplay failed:", player.id, e));
+                    }
+                });
+                player.addEventListener('error', playerErrorListener);
+                player._errorListener = playerErrorListener; // Lưu lại để có thể gỡ bỏ
+
+                if (player.textTracks) {
+                    player.textTracks.addEventListener('addtrack', (event) => { const track = event.track; if (track) { console.log("Subtitle track added:", player.id, track.label); track.mode = subtitlesEnabled ? 'showing' : 'hidden'; captionButton.classList.toggle('active', subtitlesEnabled); } });
+                }
+            });
+
+            initializeApp();
+        });
+    </script>
+
+</body>
+
+</html>
