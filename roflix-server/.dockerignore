@@ -1,0 +1,13 @@
+node_modules
+npm-debug.log
+.env
+.env.local
+.git
+.gitignore
+Dockerfile
+docker-compose.yml
+dist
+build
+*.tgz
+yarn.lock
+README.md
